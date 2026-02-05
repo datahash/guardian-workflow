@@ -118,3 +118,330 @@ This creates a **verifiable trust chain** compliant with reporting standards —
 ✔ **Model scope boundaries carefully:** Define whether your meters map to organization asset boundaries authorized for GHGP reporting
 ✔ **Automate ingestion:** APIs or IoT devices to populate MRV data
 ✔ **Use hierarchical entity structure:** Align with GHGP corporate boundary rules
+
+---
+
+## Stage 0 — Foundations & Decisions (do this first)
+
+### 0.1 Define reporting boundaries
+
+**Tasks**
+
+* Define **organizational boundary** (legal entity vs operational control)
+* Define **facility boundary** (what meters belong to which facility)
+* Decide reporting cadence (daily ingestion → monthly issuance is common)
+
+**Outputs**
+
+* Boundary definition document
+* Facility & meter registry (IDs, location, scope mapping)
+
+---
+
+### 0.2 Decide Scope handling (per GHGP V2)
+
+**Tasks**
+
+* Scope 1 → Gas (low pressure)
+* Scope 2 → Electricity (essential + non-essential)
+* Decide:
+
+  * Location-based only **or**
+  * Location + market-based (if supplier data exists)
+
+**Outputs**
+
+* Scope mapping table
+* Emission factor source list (grid, gas, water)
+
+---
+
+## Stage 1 — Event Ledger Extension (you own this)
+
+You **do not** change the ledger’s core role. You extend it.
+
+### 1.1 Add emissions-ready data model
+
+**Tasks**
+
+* Ensure ledger events include:
+
+  * Facility ID
+  * Meter/source ID
+  * Timestamp (ISO-8601, UTC)
+  * Raw units (kWh, m³)
+* Ensure **immutability + hash generation**
+
+**Outputs**
+
+* Versioned event schema
+* Ledger event hash per record
+
+---
+
+### 1.2 Embed Normalisation & Calculation Component
+
+You said this can live *inside* the ledger app — perfect.
+
+**Tasks**
+
+* Unit normalization:
+
+  * Electricity → kWh
+  * Water → m³
+  * Gas → m³
+* Derived calculations:
+
+  * Hot water energy (ΔT × volume)
+* Apply **GHGP-aligned emission factors**
+* Separate:
+
+  * Raw activity data
+  * Calculated emissions
+
+**Outputs**
+
+* Normalised activity dataset
+* Calculated emissions dataset
+* Deterministic calculation logic (versioned)
+
+---
+
+### 1.3 Evidence packaging
+
+**Tasks**
+
+* Generate an **evidence bundle** per reporting period:
+
+  * Ledger event hashes
+  * Calculation version
+  * Emission factor version
+* Store bundle hash on your side
+
+**Outputs**
+
+* Evidence hash (this is what Guardian anchors)
+
+---
+
+## Stage 2 — Guardian Environment Setup (Managed Service)
+
+### 2.1 Guardian tenant configuration
+
+**Tasks**
+
+* Confirm Managed Guardian endpoints
+* Create Guardian users & roles:
+
+  * Organization Admin
+  * Data Submitter
+  * (Optional) Verifier/VVB
+
+**Outputs**
+
+* Guardian identities
+* API credentials / DID mappings
+
+---
+
+### 2.2 Import GHGP Corporate Standard V2 policy
+
+**Tasks**
+
+* Load **GHGP Corporate Standard V2** policy
+* Review policy blocks:
+
+  * Organization
+  * Facility (Asset)
+  * Emission Sources
+  * Raw Data
+  * Reporting Metrics
+* Freeze a **policy version** for production
+
+**Outputs**
+
+* Active GHGP V2 policy instance
+* Policy version ID
+
+---
+
+## Stage 3 — Data Mapping Layer (critical glue)
+
+This is where most projects succeed or fail.
+
+### 3.1 Map ledger → Guardian schemas
+
+**Tasks**
+
+* Map:
+
+  * Facility → Guardian Asset
+  * Meter → Guardian Source
+  * Daily usage → Raw Data schema
+* Explicitly map:
+
+  * Essential electricity → Scope 2
+  * Non-essential electricity → Scope 2 (separate source)
+  * Gas → Scope 1
+  * Water → Optional reporting metric
+
+**Outputs**
+
+* Mapping specification document
+* JSON payload templates per schema
+
+---
+
+### 3.2 Build Guardian ingestion client
+
+**Tasks**
+
+* Implement Guardian API client:
+
+  * Authentication
+  * Schema creation (once)
+  * Raw data submission (recurring)
+* Handle:
+
+  * Idempotency
+  * Retry logic
+  * Submission status tracking
+
+**Outputs**
+
+* Guardian ingestion service/module
+* Submission logs
+
+---
+
+## Stage 4 — Policy Execution & Validation Flow
+
+### 4.1 Automated policy execution
+
+**Tasks**
+
+* Trigger policy after:
+
+  * Reporting period close
+  * All facilities submitted
+* Monitor:
+
+  * Validation failures
+  * Missing sources
+  * Unit mismatches
+
+**Outputs**
+
+* Policy execution records
+* GHGP-compliant reporting metrics
+
+---
+
+### 4.2 Optional verification step (future-proof)
+
+**Tasks**
+
+* Enable VVB review workflow (optional now)
+* Define approval thresholds (auto vs manual)
+
+**Outputs**
+
+* Verifier decision logs
+* Audit-ready trail
+
+---
+
+## Stage 5 — Token Issuance Design
+
+### 5.1 Token model (recommended)
+
+**Carbon Emission Token (CET)**
+
+* 1 token = 1 tCO₂e
+* Fungible (HTS)
+* Issued per org per reporting period
+
+**Tasks**
+
+* Confirm token metadata
+* Define issuance trigger in policy
+
+**Outputs**
+
+* Token definition
+* Issuance rules locked
+
+---
+
+### 5.2 Token lifecycle controls
+
+**Tasks**
+
+* Define:
+
+  * Holding accounts
+  * Retirement mechanism
+  * (Optional) Internal transfers
+* Prevent double issuance for same period
+
+**Outputs**
+
+* Token governance rules
+* Retirement flow
+
+---
+
+## Stage 6 — Operations, Monitoring & Governance
+
+### 6.1 Monitoring & alerts
+
+**Tasks**
+
+* Monitor:
+
+  * Ledger → Guardian drift
+  * Failed submissions
+  * Policy changes
+* Alert on:
+
+  * Missing days
+  * Anomalous consumption
+
+**Outputs**
+
+* Ops dashboards
+* Alerting rules
+
+---
+
+### 6.2 Versioning & audit readiness
+
+**Tasks**
+
+* Version:
+
+  * Emission factors
+  * Calculation logic
+  * Guardian policy
+* Snapshot reports per period
+
+**Outputs**
+
+* Immutable audit snapshots
+* Regulator-ready evidence pack
+
+---
+
+## End-State Architecture (What You’ll Have)
+
+* **Ledger** → system of record
+* **Normalization component** → deterministic MRV engine
+* **Guardian** → trust, policy, and issuance layer
+* **Tokens** → cryptographic proof of emissions
+* **Full audit chain**:
+
+  ```
+  Raw event → hash → calculation → Guardian policy → token
+  ```
+
+---
